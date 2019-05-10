@@ -1,8 +1,8 @@
 #!/bin/sh -e
 
 # Edit the following to change the name of the database user that will be created:
-APP_DB_USER=myapp
-APP_DB_PASS=dbpass
+APP_DB_USER=sonarqube
+APP_DB_PASS=demopass
 
 # Edit the following to change the name of the database that is created (defaults to the user name)
 APP_DB_NAME=$APP_DB_USER
@@ -65,6 +65,10 @@ apt-get -y upgrade
 
 apt-get -y install "postgresql-$PG_VERSION" "postgresql-contrib-$PG_VERSION"
 
+# Install stuff to make sonarqube work and setup easier
+apt-get -y install nano unzip wget
+apt-get install -y openjdk-8-jdk
+
 PG_CONF="/etc/postgresql/$PG_VERSION/main/postgresql.conf"
 PG_HBA="/etc/postgresql/$PG_VERSION/main/pg_hba.conf"
 PG_DIR="/var/lib/postgresql/$PG_VERSION/main"
@@ -99,3 +103,27 @@ date > "$PROVISIONED_ON"
 echo "Successfully created PostgreSQL dev virtual machine."
 echo ""
 print_db_usage
+
+# Download Sonar Developer Edition
+wget -O sonar.zip https://binaries.sonarsource.com/CommercialDistribution/sonarqube-developer/sonarqube-developer-7.7.zip
+sudo unzip sonar.zip -d /opt/
+sudo mv /opt/sonarqube-7.7/ /opt/sonarqube
+sudo chown -R vagrant:vagrant /opt/sonarqube
+
+sudo ln -s /usr/lib/jvm/java-8-openjdk-amd64 /opt/java
+
+# Download sonarqube.service for 7.7 using vagrant user from gist
+sudo wget -O /etc/systemd/system/sonarqube.service https://gist.githubusercontent.com/W1R3D-Code/19a02b13542444bae9af9262664a2be5/raw/c85e1ff01fda964bd59989f7b7e9173e495aacc0/sonarqube.service
+
+echo "sonar.jdbc.username=$APP_DB_NAME" | sudo tee -a /opt/sonarqube/conf/sonar.properties > /dev/null
+echo "sonar.jdbc.password=$APP_DB_PASS" | sudo tee -a /opt/sonarqube/conf/sonar.properties > /dev/null
+echo "sonar.jdbc.url=jdbc:postgresql://localhost/$APP_DB_NAME" | sudo tee -a /opt/sonarqube/conf/sonar.properties > /dev/null
+echo "sonar.web.javaAdditionalOpts=-server" | sudo tee -a /opt/sonarqube/conf/sonar.properties > /dev/null
+# echo "sonar.web.host=127.0.0.1" | sudo tee -a /opt/sonarqube/conf/sonar.properties > /dev/null
+
+# Start sonarqube service
+sudo systemctl start sonarqube.service	
+# Enable auto-start on next boot
+sudo systemctl enable sonarqube.service
+
+# systemctl status sonarqube.service
